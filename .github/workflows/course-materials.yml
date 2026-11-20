@@ -45,7 +45,7 @@ jobs:
           python -m playwright install chromium
           python -m tools.course_materials
           libreoffice -env:UserInstallation=file:///tmp/course-lo --headless --convert-to pdf --outdir build build/*.docx build/*.pptx
-          for file in build/*.pdf; do pdftotext -layout "$file" - | head -c 1500; pdfinfo "$file" | grep Pages; done
+          python -m tools.review_materials
       - uses: actions/upload-artifact@v4
         with:
           name: VulnLensDB-course
@@ -54,4 +54,5 @@ jobs:
             build/*.pptx
             build/*.pdf
             build/*.json
+            build/*-preview.jpg
           if-no-files-found: error
