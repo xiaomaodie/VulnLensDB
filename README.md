@@ -26,3 +26,11 @@ python -m pytest -q
 `data/snapshot.json` 保留采集时间、OSV 修改时间、NVD 评分提供方、修复版本和 deps.dev 链接。刷新命令为 `python tools/collect.py`，成功后运行 `python -m backend.catalog`。导入器在一次事务中替换此课程专用的七张表。查询仅覆盖快照中的公告；未命中不能证明依赖安全。
 
 [修订方案、表关系与查询对照](docs/方案G-修订版.md)
+
+## 提交材料
+
+- [课程报告（Word）](submission/VulnLensDB-report.docx) · [PDF 阅读版](submission/VulnLensDB-report.pdf)
+- [答辩演示（PowerPoint）](submission/VulnLensDB-defense.pptx) · [PDF 阅读版](submission/VulnLensDB-defense.pdf)
+- [MySQL 实验记录](submission/benchmark.json)，含完整执行计划及每次查询耗时。合成数据仅用于性能实验，业务页面使用三源真实快照。
+
+在 **Actions → Build course materials → Run workflow** 可重新生成材料。报告、幻灯片和原始结果来自同一次运行。提交课程平台前请在 Word 中填写姓名、学号及个人贡献。
