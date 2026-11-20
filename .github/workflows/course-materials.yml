@@ -1,0 +1,57 @@
+name: Build course materials
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/course_materials.py'
+      - '.github/workflows/course-materials.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-root
+          MYSQL_DATABASE: vulnlens
+          MYSQL_USER: student
+          MYSQL_PASSWORD: disposable-test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      DB_HOST: 127.0.0.1
+      DB_NAME: vulnlens
+      DB_USER: student
+      DB_PASSWORD: disposable-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt python-docx python-pptx playwright
+      - run: |
+          python -m backend.catalog
+          python -m pytest -q
+          python -m tools.benchmark build/benchmark.json
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer libreoffice-impress fonts-noto-cjk graphviz poppler-utils
+          python -m playwright install chromium
+          python -m tools.course_materials
+          libreoffice -env:UserInstallation=file:///tmp/course-lo --headless --convert-to pdf --outdir build build/*.docx build/*.pptx
+          for file in build/*.pdf; do pdftotext -layout "$file" - | head -c 1500; pdfinfo "$file" | grep Pages; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VulnLensDB-course
+          path: |
+            build/*.docx
+            build/*.pptx
+            build/*.pdf
+            build/*.json
+          if-no-files-found: error
