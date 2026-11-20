@@ -7,13 +7,14 @@
 1. 将本目录内的文件提交到 GitHub 仓库根目录，包括隐藏的 `.devcontainer` 目录。
 2. 打开仓库，选择 **Code → Codespaces → Create codespace on main**（分支名以实际为准）。
 3. 等待环境创建、MySQL 健康检查和 Python 依赖安装完成。
-4. 在 Codespaces 终端执行：
+4. 环境会自动启动 Flask 后端。在 **Ports** 中打开 5000 端口，在浏览器地址后加 `/health`，应返回 `status: ok`；访问 `/health/db` 应返回 MySQL 版本。
+5. 若需要手动启动，在 Codespaces 终端执行：
 
 ```bash
-python -m flask --app backend.app run --host 0.0.0.0 --port 5000
+bash .devcontainer/start.sh
 ```
 
-5. 在 **Ports** 中打开 5000 端口，在浏览器地址后加 `/health`，应返回 `status: ok`；访问 `/health/db` 应返回 MySQL 版本。
+当前 Flask 内置服务用于开发演示；长期托管时需改用生产 WSGI 服务。启动日志位于 `/tmp/vulnlens-api.log`。
 
 MySQL 运行在同一云端环境的独立容器中，主机名为 `db`。不需要使用本机 MySQL，也不需要向公网开放 3306。Node.js 在创建环境时自动安装，后续用于前端。
 

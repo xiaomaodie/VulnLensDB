@@ -11,5 +11,6 @@
     "5000": { "label": "VulnLensDB API", "onAutoForward": "notify" }
   },
   "postCreateCommand": "python -m pip install -r requirements.txt",
+  "postStartCommand": "bash .devcontainer/start.sh",
   "remoteUser": "vscode"
 }
