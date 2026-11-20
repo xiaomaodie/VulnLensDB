@@ -1,0 +1,17 @@
+{
+  "collected": "2026-11-20T14:25:24.268197+00:00",
+  "ecosystems": [
+    "PyPI",
+    "Maven",
+    "Go"
+  ],
+  "advisories": 19447,
+  "excluded": {
+    "PyPI": 12698,
+    "Maven": 124,
+    "Go": 203
+  },
+  "dependency_roots": 20,
+  "nvd_records": 66,
+  "collection_errors": []
+}
