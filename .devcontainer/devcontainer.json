@@ -1,0 +1,15 @@
+{
+  "name": "VulnLensDB",
+  "dockerComposeFile": "compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/VulnLensDB",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "forwardPorts": [5000],
+  "portsAttributes": {
+    "5000": { "label": "VulnLensDB API", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "python -m pip install -r requirements.txt",
+  "remoteUser": "vscode"
+}
