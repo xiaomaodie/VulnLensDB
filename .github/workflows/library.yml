@@ -1,0 +1,29 @@
+name: Verify expanded MySQL catalog
+on:
+  workflow_dispatch:
+  push:
+    paths: ['backend/**','sql/library.sql','tools/verify_library.py','tests/**','data/library/**','.github/workflows/library.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      mysql:
+        image: mysql:8.0
+        env: {MYSQL_DATABASE: vulnlens, MYSQL_USER: student, MYSQL_PASSWORD: disposable, MYSQL_ROOT_PASSWORD: temporary}
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env: {DB_HOST: 127.0.0.1, DB_NAME: vulnlens, DB_USER: student, DB_PASSWORD: disposable}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - run: python -m tools.verify_library
+      - run: python -m pytest -q
+      - uses: actions/upload-artifact@v4
+        with: {name: library-evidence, path: build/library-evidence.json}
