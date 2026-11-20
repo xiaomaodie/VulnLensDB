@@ -45,7 +45,7 @@ def affected(version, start, stop):
     return (start == "0" or Version(start) <= target) and target < Version(stop)
 
 
-@site.get("/")
+@site.get("/sample")
 def home():
     term = request.args.get("q", "").strip()[:160]
     entries = rows("""SELECT DISTINCT a.id,a.title,a.osv_level,r.package_name,n.score,n.cve

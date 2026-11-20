@@ -5,3 +5,5 @@ tenacity>=9,<10
 packaging>=24,<27
 semver>=3,<4
 pytest>=8,<10
+defusedxml>=0.7,<1
+cvss>=3.4,<4
