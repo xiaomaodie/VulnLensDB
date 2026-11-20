@@ -1,36 +1,23 @@
-"""Cloud environment checks. Business APIs will be implemented next."""
-
-import os
-
 import pymysql
 from flask import Flask, jsonify
+from .catalog import connect
+from .views import site
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 16384
+app.register_blueprint(site)
 
 
 @app.get("/health")
 def health():
-    return jsonify(status="ok", service="VulnLensDB", stage="environment-only")
+    return jsonify(status="ok", service="VulnLensDB", stage="catalog")
 
 
 @app.get("/health/db")
 def database_health():
     try:
-        with pymysql.connect(
-            host=os.environ.get("DB_HOST", "127.0.0.1"),
-            port=int(os.environ.get("DB_PORT", "3306")),
-            user=os.environ.get("DB_USER", "vulnlens"),
-            password=os.environ["DB_PASSWORD"],
-            database=os.environ.get("DB_NAME", "vulnlens"),
-            charset="utf8mb4",
-            connect_timeout=5,
-            read_timeout=5,
-            write_timeout=5,
-        ) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT VERSION()")
-                version = cursor.fetchone()[0]
-        return jsonify(status="ok", database="mysql", version=version)
+        with connect() as db, db.cursor() as cur:
+            cur.execute("SELECT VERSION() AS version")
+            return jsonify(status="ok", database="mysql", version=cur.fetchone()["version"])
     except (pymysql.MySQLError, KeyError, ValueError):
-        app.logger.warning("Database health check failed")
-        return jsonify(status="error", message="Database unavailable; check environment configuration."), 503
+        return jsonify(status="error", message="Database unavailable"), 503

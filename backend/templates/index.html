@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block body %}
+<h1>开源依赖漏洞目录</h1><p class="muted">PyPI 教学快照 · 采集于 {{ counts.collected }} UTC</p>
+<section class="metrics">{% for label,value in [('收录包',counts.packages),('漏洞公告',counts.advisories),('受影响区间',counts.spans)] %}<div><strong>{{ value }}</strong>{{ label }}</div>{% endfor %}</section>
+<form><label for="q">按包名、公告编号或英文标题关键词检索</label><div class="search"><input id="q" name="q" type="search" value="{{ term }}" placeholder="例如 django 或 CVE-2022-28346"><button>查询</button></div></form>
+<h2>公告列表 <small>{{ entries|length }} 条</small></h2>
+{% for r in entries %}<article><div><small>{{ r.package_name }} · {{ r.cve }}</small><h3><a href="{{url_for('site.detail',aid=r.id)}}">{{ r.title }}</a></h3><code>{{ r.id }}</code></div><b>CVSS {{ r.score }}</b></article>{% else %}<p>快照中没有匹配记录。</p>{% endfor %}{% endblock %}
