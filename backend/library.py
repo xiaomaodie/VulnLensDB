@@ -52,15 +52,39 @@ def normalize(eco,name):
     return canonicalize_name(name) if eco=="PyPI" else name
 
 
+def contains_pattern(term):
+    """Treat SQL wildcard characters as literal search text."""
+    escaped = term.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    return "%" + escaped + "%"
+
+
 def keyword_clause(term):
-    if not term: return "",[]
-    exact="""(a.id=%s OR EXISTS(SELECT 1 FROM lib_alias l WHERE l.advisory_id=a.id AND l.alias=%s)
-        OR EXISTS(SELECT 1 FROM lib_affected x JOIN lib_package p ON p.id=x.package_id
-                  WHERE x.advisory_id=a.id AND p.name IN (%s,%s))
+    if not term:
+        return "", []
+    fragment = contains_pattern(term)
+    identifier = contains_pattern(term.lower())
+    package = contains_pattern(canonicalize_name(term))
+    clause = """(
+        LOWER(a.id) LIKE %s ESCAPE '!'
+        OR a.title LIKE %s ESCAPE '!'
         OR MATCH(a.title) AGAINST (%s IN NATURAL LANGUAGE MODE)
-        OR EXISTS(SELECT 1 FROM lib_alias z JOIN lib_nvd n ON n.cve=z.alias WHERE z.advisory_id=a.id
-            AND MATCH(n.description) AGAINST (%s IN NATURAL LANGUAGE MODE)))"""
-    return exact,[term,term,term,canonicalize_name(term),term,term]
+        OR a.id IN (
+            SELECT l.advisory_id FROM lib_alias l
+            WHERE LOWER(l.alias) LIKE %s ESCAPE '!'
+            UNION
+            SELECT x.advisory_id FROM lib_package p
+            JOIN lib_affected x ON x.package_id=p.id
+            WHERE LOWER(p.name) LIKE %s ESCAPE '!' OR LOWER(p.name) LIKE %s ESCAPE '!'
+            UNION
+            SELECT z.advisory_id FROM lib_nvd n JOIN lib_alias z ON n.cve=z.alias
+            WHERE n.description LIKE %s ESCAPE '!'
+               OR MATCH(n.description) AGAINST (%s IN NATURAL LANGUAGE MODE)
+        )
+    )"""
+    return clause, [
+        identifier, fragment, term, identifier,
+        identifier, package, fragment, term,
+    ]
 
 
 @library.get("/")

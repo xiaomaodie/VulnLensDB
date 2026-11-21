@@ -39,3 +39,24 @@ def test_library_end_to_end():
     assert c.post("/account/refresh-stats",data={"_token":token}).status_code==403
     assert c.post("/library/check",data={"eco":"PyPI","pins":"django==3.2.9","save":"yes","_token":token}).status_code==200
     assert "暂无保存记录" not in c.get("/account").get_data(as_text=True)
+
+
+@pytest.mark.skipif(not os.getenv("DB_PASSWORD"), reason="requires MySQL snapshot")
+@pytest.mark.parametrize("query,ecosystem", [
+    ("jang", "PyPI"),            # Inside the package name django.
+    ("cve-2021-4422", "Maven"),  # Incomplete, mixed-case advisory identifier.
+    ("njectio", "PyPI"),         # Inside a title word, not a FULLTEXT token.
+])
+def test_search_matches_partial_terms(query, ecosystem):
+    with app.test_client() as client:
+        page = client.get("/", query_string={"q": query, "eco": ecosystem})
+    assert page.status_code == 200
+    assert re.search(r"共 [1-9][0-9]* 条", page.get_data(as_text=True))
+
+
+@pytest.mark.skipif(not os.getenv("DB_PASSWORD"), reason="requires MySQL snapshot")
+def test_search_treats_sql_wildcards_as_literals():
+    with app.test_client() as client:
+        page = client.get("/library", query_string={"q": "%_%_!"})
+    assert page.status_code == 200
+    assert "共 0 条" in page.get_data(as_text=True)
