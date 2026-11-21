@@ -43,7 +43,7 @@
         {% if fixes %}<p>这个受影响区间的修复版本为 <strong>{{fixes|join('、')}}</strong>。升级前可查看目标版本的其他公告。</p>{% else %}<p>本次快照没有该版本对应的修复记录。</p>{% endif %}
       {% elif status=='未命中' %}<strong>{{package.name}} {{version}} 未命中这条公告</strong>
       {% else %}<strong>{{package.name}} {{version}} 需要核对</strong><p>现有版本资料不足以判断，可查看原始公告。</p>{% endif %}
-      <a href="{{url_for('library.package_detail',eco=package.ecosystem,name=package.name,version=version,_anchor='version-result')}}">查看该版本的其他公告 →</a>
+      <a href="{{url_for('library.package_version',eco=package.ecosystem,name=package.name,version=version)}}">查看该版本的其他公告 →</a>
     </div>{% endif %}
   </section>{% endif %}
 

@@ -101,7 +101,7 @@ def test_package_versions_show_matching_release_counts():
         path = "/packages/PyPI/pillow"
         filtered = client.get(path, query_string={"show": "affected"}).get_data(as_text=True)
         assert "版本与漏洞" in filtered and "只看有命中的版本" in filtered
-        assert "show=affected" in filtered and "#version-result" in filtered
+        assert "show=affected" in filtered and "/package-results/PyPI/pillow?" in filtered
         assert not re.search(r"<td>0 \u6761(?:</td>|<small)", filtered)
         selected = client.get(path, query_string={"version": "10.3.0"}).get_data(as_text=True)
         package_id = rows("SELECT id FROM lib_package WHERE ecosystem='PyPI' AND name='pillow'")[0]["id"]
@@ -123,3 +123,17 @@ def test_advisory_shows_actionable_fix_and_version_result():
     assert "pillow 12.3.0 受这条漏洞影响" in page and "13.0.0" in page
     assert "<summary>原始公告与数据来源</summary>" in page
     assert "pillow 13.0.0 未命中这条公告" in fixed.get_data(as_text=True)
+
+@pytest.mark.skipif(not os.getenv("DB_PASSWORD"), reason="requires MySQL snapshot")
+def test_package_version_uses_separate_results_page():
+    with app.test_client() as client:
+        detail = client.get("/packages/PyPI/pillow").get_data(as_text=True)
+        assert 'action="/package-results/PyPI/pillow"' in detail
+        assert 'id="version-result"' not in detail
+        result = client.get("/package-results/PyPI/pillow",
+                            query_string={"version": "12.3.0", "show": "affected", "page": 2})
+        assert result.status_code == 200
+        body = result.get_data(as_text=True)
+        assert "12.3.0 命中" in body and "本区间修复版本" in body
+        assert 'href="/packages/PyPI/pillow?show=affected&amp;page=2#versions"' in body
+        assert 'id="versions"' not in body

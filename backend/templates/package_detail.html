@@ -7,10 +7,10 @@
   <p class="muted">{{ ecosystem_label }}</p>
   <h1>{{ 'Pillow' if eco=='PyPI' and package.name=='pillow' else package.name }}</h1>
   {% if intro %}<p>{{ intro }}</p>{% endif %}
-  <form action="{{ url_for('library.package_detail',eco=eco,name=package.name,_anchor='version-result') }}">
-    <label for="version">你正在用哪个版本？</label>
+  <form action="{{ url_for('library.package_version',eco=eco,name=package.name) }}">
+    {% if show %}<input type="hidden" name="show" value="{{ show }}">{% endif %}{% if page>1 %}<input type="hidden" name="page" value="{{ page }}">{% endif %}<label for="version">你正在用哪个版本？</label>
     <div class="package-search">
-      <input id="version" name="version" list="releases" value="{{ version }}" placeholder="{{ '例如 '+releases[0].version if releases else '输入固定版本号' }}" required maxlength="200">
+      <input id="version" name="version" list="releases" placeholder="{{ '例如 '+releases[0].version if releases else '输入固定版本号' }}" required maxlength="200">
       <datalist id="releases">{% for release in releases %}<option value="{{ release.version }}"></option>{% endfor %}</datalist>
       <button>查这个版本</button>
     </div>
@@ -31,8 +31,8 @@
     <table class="version-table">
       <thead><tr><th scope="col">版本</th><th scope="col">发布日期（UTC）</th><th scope="col">命中公告</th><th scope="col">严重程度</th></tr></thead>
       <tbody>{% for release in shown %}
-        <tr {% if release.version==version %}class="version-selected"{% endif %}>
-          <td><a href="{{ url_for('library.package_detail',eco=eco,name=package.name,version=release.version,show=show or none,page=page,_anchor='version-result') }}">{{ release.version }}</a></td>
+        <tr>
+          <td><a href="{{ url_for('library.package_version',eco=eco,name=package.name,version=release.version,show=show or none,page=page) }}">{{ release.version }}</a></td>
           <td>{{ release.published.date() if release.published else '—' }}</td>
           <td>{{ release.hits|length }} 条{% if release.uncertain %}<small class="version-uncertain">另有 {{ release.uncertain|length }} 条待核对</small>{% endif %}</td>
           <td>{% for level,count in release.counts.items() if count %}<span class="severity severity-{{ level|lower }}">{{ levels[level] }} {{ count }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
@@ -42,25 +42,9 @@
   </div>
   {% else %}<p>{{ '没有符合条件的版本。' if releases else '当前快照暂无版本列表，可以在上方手动检查。' }}</p>{% endif %}
   {% if pages>1 %}<nav class="filters version-pages" aria-label="版本分页">
-    {% if page>1 %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,version=version or none,show=show or none,page=page-1,_anchor='versions') }}">上一页</a>{% endif %}
+    {% if page>1 %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,show=show or none,page=page-1,_anchor='versions') }}">上一页</a>{% endif %}
     <span>第 {{ page }} / {{ pages }} 页</span>
-    {% if page<pages %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,version=version or none,show=show or none,page=page+1,_anchor='versions') }}">下一页</a>{% endif %}
+    {% if page<pages %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,show=show or none,page=page+1,_anchor='versions') }}">下一页</a>{% endif %}
   </nav>{% endif %}
-</section>
-<section id="version-result" class="version-result">
-{% if error %}<p role="alert">{{ error }}</p>{% elif selected is not none %}
-  <h2>{{ version }} 命中 {{ selected.hits|length }} 条公告</h2>
-  {% if not selected.hits %}<p>当前数据快照中没有确认命中的公告。</p>{% endif %}
-  {% for item in selected.hits %}
-  <article><div><small>{{ item.id }}</small><h3><a href="{{ url_for('library.advisory',aid=item.id,package=package.id,version=version) }}">{{ item.title }}</a></h3>
-    <span>本区间修复版本 {{ item.fixed or '暂无记录' }}</span></div>
-    <span class="severity severity-{{ item.severity|lower }}">{{ levels.get(item.severity,item.severity) }}{% if item.score is not none %} · {{ item.score }}{% endif %}</span></article>
-  {% endfor %}
-  {% if selected.uncertain %}
-  <details><summary>{{ selected.uncertain|length }} 条公告需要核对版本范围</summary>
-    <ul>{% for item in selected.uncertain %}<li><a href="{{ url_for('library.advisory',aid=item.id,package=package.id,version=version) }}">{{ item.title }}</a></li>{% endfor %}</ul>
-  </details>
-  {% endif %}
-{% endif %}
 </section>
 {% endblock %}

@@ -174,8 +174,7 @@ def version_results(eco, releases, advisories):
             for release in releases]
 
 
-@library.get("/packages/<eco>/<path:name>")
-def package_detail(eco, name):
+def find_package(eco, name):
     if eco not in ECOS or len(name) > 730:
         abort(404)
     record = rows("""SELECT p.id,p.name,s.advisories FROM lib_package p
@@ -183,7 +182,39 @@ def package_detail(eco, name):
         (eco, normalize(eco, name)))
     if not record:
         abort(404)
-    package = record[0]
+    return record[0]
+
+
+@library.get("/package-results/<eco>/<path:name>")
+def package_version(eco, name):
+    return render_package_version(eco, find_package(eco, name), request.args.get("version", "").strip())
+
+
+def render_package_version(eco, package, version):
+    error = None
+    selected = None
+    try:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", version):
+            raise ValueError("Expected a fixed version")
+        parse_pins(f"{package['name']}=={version}", eco)
+        selected = release_findings(eco, version, package_advisories(package["id"]))
+    except ValueError:
+        error = "请输入一个有效的固定版本号，例如 10.3.0。"
+    return render_template("package_version.html", package=package, eco=eco,
+                           ecosystem_label=PACKAGE_LABELS[eco],
+                           version=version, error=error, selected=selected,
+                           show=request.args.get("show", ""),
+                           page=request.args.get("page", 1, type=int)), 400 if error else 200
+
+
+@library.get("/packages/<eco>/<path:name>")
+def package_detail(eco, name):
+    package = find_package(eco, name)
+    version = request.args.get("version", "").strip()
+    if version:
+        # Previously shared version URLs still show the results.
+        return render_package_version(eco, package, version)
+
     releases = rows("""SELECT version,published FROM lib_release WHERE package_id=%s
         ORDER BY published IS NULL,published DESC,version DESC""", (package["id"],))
     advisories = package_advisories(package["id"])
@@ -204,7 +235,6 @@ def package_detail(eco, name):
         versions = [value for _, value in sorted(sortable, reverse=True)] + sorted(other)
         releases = [dict(version=value, published=None) for value in versions]
     show = request.args.get("show", "")
-    version = request.args.get("version", "").strip()
     all_results = version_results(eco, releases, advisories) if show == "affected" else None
     visible = [r for r in all_results if r["hits"]] if all_results is not None else releases
     pages = max(1, (len(visible) + VERSION_PAGE_SIZE - 1) // VERSION_PAGE_SIZE)
@@ -214,22 +244,11 @@ def package_detail(eco, name):
     if all_results is None:
         shown = version_results(eco, shown, advisories)
 
-    error = None
-    selected = None
-    if version:
-        try:
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", version):
-                raise ValueError("Expected a fixed version")
-            parse_pins(f"{package['name']}=={version}", eco)
-            selected = release_findings(eco, version, advisories)
-        except ValueError:
-            error = "请输入一个有效的固定版本号，例如 10.3.0。"
     return render_template("package_detail.html", package=package, eco=eco,
                            ecosystem_label=PACKAGE_LABELS[eco],
                            intro=PACKAGE_INTROS.get((eco, package["name"])),
                            releases=releases, shown=shown, listed_only=listed_only,
-                           version=version, error=error, selected=selected,
-                           show=show, page=page, pages=pages), 400 if error else 200
+                           show=show, page=page, pages=pages)
 
 
 @library.get("/library")
