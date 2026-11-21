@@ -17,7 +17,7 @@ def test_snapshot_pages_and_pins():
     initialize()
     initialize()
     client = app.test_client()
-    assert b"SQL Injection in Django" in client.get("/?q=PYSEC-2022-190").data
+    assert b"SQL Injection in Django" in client.get("/sample?q=PYSEC-2022-190").data
     assert b"2.2.28" in client.get("/advisories/GHSA-2gwj-7jmv-h26r").data
     assert client.get("/advisories/missing").status_code == 404
     for view in REPORTS:
