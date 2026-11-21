@@ -87,7 +87,105 @@ def keyword_clause(term):
     ]
 
 
+PACKAGE_PAGE_SIZE = 20
+PACKAGE_INTROS = {
+    ("PyPI", "pillow"): "Python 图片处理库",
+    ("PyPI", "django"): "Python 网站开发框架",
+    ("PyPI", "requests"): "Python HTTP 请求库",
+    ("PyPI", "flask"): "Python 轻量级网站开发框架",
+    ("Maven", "org.apache.logging.log4j:log4j-core"): "Java 日志组件",
+}
+PACKAGE_LABELS = {"PyPI": "PyPI · Python", "Maven": "Maven · Java", "Go": "Go"}
+
+
 @library.get("/")
+def package_search():
+    if not (DATA / "manifest.json").exists():
+        return catalog()
+    term = request.args.get("q", "").strip()[:150]
+    eco = request.args.get("eco", "")
+    if eco and eco not in ECOS:
+        abort(400)
+    search = term.lower()
+    normalized = canonicalize_name(term)
+    predicates, params = [], []
+    if eco:
+        predicates.append("p.ecosystem=%s")
+        params.append(eco)
+    if term:
+        predicates.append("(LOWER(p.name) LIKE %s ESCAPE '!' OR "
+                          "(p.ecosystem='PyPI' AND p.name LIKE %s ESCAPE '!'))")
+        params += [contains_pattern(search), contains_pattern(normalized)]
+    condition = " WHERE " + " AND ".join(predicates) if predicates else ""
+    total = rows("SELECT COUNT(*) n FROM lib_package p" + condition, params)[0]["n"]
+    pages = max(1, (total + PACKAGE_PAGE_SIZE - 1) // PACKAGE_PAGE_SIZE)
+    page = max(1, min(request.args.get("page", 1, type=int), pages))
+    order = ""
+    order_params = []
+    if term:
+        order = """CASE
+            WHEN LOWER(p.name)=%s OR (p.ecosystem='PyPI' AND p.name=%s) THEN 0
+            WHEN LEFT(LOWER(p.name),CHAR_LENGTH(%s))=%s THEN 1
+            ELSE 2 END, """
+        order_params = [search, normalized, search, search]
+    packages = rows("""SELECT p.ecosystem,p.name,s.advisories
+        FROM lib_package p JOIN lib_stats s ON s.package_id=p.id""" + condition +
+        " ORDER BY " + order + "s.advisories DESC,p.ecosystem,p.name LIMIT %s OFFSET %s",
+        params + order_params + [PACKAGE_PAGE_SIZE, (page - 1) * PACKAGE_PAGE_SIZE])
+    return render_template("package_search.html", packages=packages, q=term, eco=eco,
+                           total=total, page=page, pages=pages, labels=PACKAGE_LABELS,
+                           intros=PACKAGE_INTROS)
+
+
+@library.get("/packages/<eco>/<path:name>")
+def package_detail(eco, name):
+    if eco not in ECOS or len(name) > 730:
+        abort(404)
+    record = rows("""SELECT p.id,p.name,s.advisories FROM lib_package p
+        JOIN lib_stats s ON s.package_id=p.id WHERE p.ecosystem=%s AND p.name=%s""",
+        (eco, normalize(eco, name)))
+    if not record:
+        abort(404)
+    package = record[0]
+    releases = rows("""SELECT version FROM lib_release WHERE package_id=%s
+        ORDER BY published IS NULL,published DESC,version DESC""", (package["id"],))
+    version = request.args.get("version", "").strip()
+    error = None
+    hits, uncertain = [], []
+    if version:
+        try:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", version):
+                raise ValueError("Expected a fixed version")
+            pins = parse_pins(f"{package['name']}=={version}", eco)
+            if len(pins) != 1:
+                raise ValueError("Expected one version")
+            results = [result for result in scan(pins) if result[4]]
+            if results:
+                ids = list(dict.fromkeys(result[4] for result in results))
+                marks = ",".join(["%s"] * len(ids))
+                advisories = {a["id"]: a for a in rows(
+                    f"SELECT id,title,severity FROM lib_advisory WHERE id IN ({marks})", ids)}
+                for _, _, _, status, aid, score, fixed in results:
+                    item = dict(advisories[aid], score=score, fixed=fixed)
+                    (hits if status == "命中" else uncertain).append(item)
+        except ValueError:
+            error = "请输入一个有效的固定版本号，例如 10.3.0。"
+    pages = max(1, (package["advisories"] + PACKAGE_PAGE_SIZE - 1) // PACKAGE_PAGE_SIZE)
+    page = max(1, min(request.args.get("page", 1, type=int), pages))
+    history = []
+    if not version or error:
+        history = rows("""SELECT a.id,a.title,a.severity,a.score
+            FROM lib_affected x JOIN lib_advisory a ON a.id=x.advisory_id
+            WHERE x.package_id=%s ORDER BY a.published DESC,a.id LIMIT %s OFFSET %s""",
+            (package["id"], PACKAGE_PAGE_SIZE, (page - 1) * PACKAGE_PAGE_SIZE))
+    return render_template("package_detail.html", package=package, eco=eco,
+                           ecosystem_label=PACKAGE_LABELS[eco],
+                           intro=PACKAGE_INTROS.get((eco, package["name"])),
+                           releases=releases, version=version, error=error, hits=hits,
+                           uncertain=uncertain, history=history, page=page, pages=pages), 400 if error else 200
+
+
+
 @library.get("/library")
 def catalog():
     if not (DATA/"manifest.json").exists():

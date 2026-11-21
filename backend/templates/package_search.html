@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}查软件包{% endblock %}
+{% block body %}
+<section class="package-hero">
+  <h1>查软件包</h1>
+  <p>输入包名，找到软件包后选择你正在使用的版本，查看有哪些已知漏洞。</p>
+  <form action="{{ url_for('library.package_search') }}">
+    <label for="q">软件包名称</label>
+    <div class="package-search">
+      <input type="search" id="q" name="q" placeholder="例如 pillow、django 或 log4j" value="{{ q }}">
+      <select aria-label="软件生态" name="eco">
+        <option value="">所有生态</option>
+        {% for key, label in labels.items() %}<option value="{{ key }}" {% if eco==key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <button>搜索软件包</button>
+    </div>
+  </form>
+  {% if not q %}<p class="package-examples">试试
+    {% for ex in ['pillow','django','log4j'] %}<a href="{{ url_for('library.package_search',q=ex) }}">{{ ex }}</a>{% endfor %}
+  </p>{% else %}
+  <p class="package-examples"><a href="{{ url_for('library.catalog',q=q,eco=eco) }}">在公告目录中搜索“{{ q }}”</a></p>
+  {% endif %}
+</section>
+<h2>{{ '搜索结果' if q else '软件包目录' }} <small>{{ '{:,}'.format(total) }} 个包</small></h2>
+<ul class="package-list">
+{% for pkg in packages %}
+  <li><a href="{{ url_for('library.package_detail',eco=pkg.ecosystem,name=pkg.name) }}">
+    <div><small>{{ labels[pkg.ecosystem] }}</small><strong>{{ 'Pillow' if pkg.ecosystem=='PyPI' and pkg.name=='pillow' else pkg.name }}</strong>
+      {% if intros.get((pkg.ecosystem,pkg.name)) %}<span>{{ intros[(pkg.ecosystem,pkg.name)] }}</span>{% endif %}
+    </div>
+    <span class="package-total">{{ pkg.advisories }} 条历史公告 <span aria-hidden="true">→</span></span>
+  </a></li>
+{% else %}
+  <li>没有搜到这个包。可以试试更短的名称或切换生态。</li>
+{% endfor %}
+</ul>
+{% if pages>1 %}
+<nav class="filters" aria-label="软件包分页">
+  {% if page>1 %}<a href="{{ url_for('library.package_search',q=q,eco=eco,page=page-1) }}">上一页</a>{% endif %}
+  <span>第 {{ page }} / {{ pages }} 页</span>
+  {% if page<pages %}<a href="{{ url_for('library.package_search',q=q,eco=eco,page=page+1) }}">下一页</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}
