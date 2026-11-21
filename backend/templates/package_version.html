@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ package.name }} {{ version }} 的公告{% endblock %}
 {% block body %}
+{% set levels={'CRITICAL':'严重','HIGH':'高危','MODERATE':'中危','LOW':'低危','UNKNOWN':'等级未知'} %}
 <a href="{{ url_for('library.package_detail',eco=eco,name=package.name,show=show or none,page=page if page>1 else none,_anchor='versions') }}">← 返回 {{ package.name }} 版本表</a>
 <section class="package-hero">
   <p class="muted">{{ ecosystem_label }}</p>
