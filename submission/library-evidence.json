@@ -1,0 +1,63 @@
+{
+  "counts": {
+    "lib_stats": 6700,
+    "lib_edge": 62,
+    "lib_profile": 20,
+    "lib_check": 222,
+    "lib_project": 18,
+    "lib_release": 6807,
+    "lib_cpe": 601,
+    "lib_nvd": 66,
+    "lib_span": 39545,
+    "lib_affected": 24633,
+    "lib_alias": 52751,
+    "lib_advisory": 19447,
+    "lib_package": 6700,
+    "lib_batch": 1
+  },
+  "ecosystems": [
+    {
+      "ecosystem": "Go",
+      "advisories": 5262
+    },
+    {
+      "ecosystem": "Maven",
+      "advisories": 7132
+    },
+    {
+      "ecosystem": "PyPI",
+      "advisories": 7173
+    }
+  ],
+  "scored_projects": 18,
+  "full_rows": 24633,
+  "query": "SELECT advisory_id FROM full_lookup_trial WHERE package_id=%s ORDER BY advisory_id",
+  "package_id": 197,
+  "matched": 162,
+  "before": {
+    "plan": "-> Sort: full_lookup_trial.advisory_id  (cost=2512 rows=24876) (actual time=9.15..9.15 rows=162 loops=1)\n    -> Filter: (full_lookup_trial.package_id = 197)  (cost=2512 rows=24876) (actual time=0.113..9.11 rows=162 loops=1)\n        -> Table scan on full_lookup_trial  (cost=2512 rows=24876) (actual time=0.0122..8.18 rows=24633 loops=1)\n",
+    "runs_ms": [
+      9.1,
+      9.425,
+      9.034,
+      8.938,
+      8.834,
+      8.823,
+      8.73
+    ],
+    "median_ms": 8.938
+  },
+  "after": {
+    "plan": "-> Covering index lookup on full_lookup_trial using pkg_advisory (package_id=197)  (cost=20 rows=162) (actual time=0.0149..0.0996 rows=162 loops=1)\n",
+    "runs_ms": [
+      0.702,
+      0.696,
+      0.683,
+      0.657,
+      0.63,
+      0.654,
+      0.647
+    ],
+    "median_ms": 0.657
+  }
+}

@@ -1,36 +1,37 @@
 # VulnLensDB
 
-开源依赖漏洞多源整合数据库课程演示。MySQL 8 存储 PyPI 公告及版本区间，Flask 提供中文目录、公告详情、依赖清单检查与统计。演示使用仓库中固定的三源快照，启动时无需重新访问外部数据接口。
+数据库系统课程项目。系统用 MySQL 8 整合 PyPI、Maven 和 Go 的 OSV 公告、NVD CVE 样本与 deps.dev 发行记录和依赖图。网页提供软件包搜索、逐版本漏洞查询、公告检索、依赖清单检查与统计。
 
-## 在已有 Codespace 运行
+## 打开和运行
 
-在仓库根目录执行以下命令。新建环境会自动安装依赖、导入数据并启动服务。已有环境从旧版升级时，可在拉取代码后停止并重新打开该 Codespace，使旧版 Flask 退出。
+继续使用仓库已有的 GitHub Codespace。已有环境同步更新后，在云端终端运行：
 
 ```bash
 git pull --ff-only
+python -m pip install -r requirements.txt
 bash .devcontainer/start.sh
-python -m pytest -q
 ```
 
-打开 **端口 → 5000** 进入首页。健康检查位于 `/health/db`。使用完毕后在 GitHub Codespaces 页面停止环境，以节省计算额度。
+在 **端口** 面板打开启动脚本提示的端口。默认是 5000，当前答辩演示使用同一环境的 5001。已有旧进程占用端口时，先停止旧应用进程，再启动新版。数据库连通检查位于 `/health/db`。使用完毕后可在 GitHub Codespaces 停止环境以节省额度。
 
-## 五分钟演示
+## 答辩演示
 
-1. 首页按 `PYSEC-2022-190` 搜索，打开 Django 公告。观察同一公告的三段区间、别名及三个来源。
-2. 在“依赖检查”中对比 `django==3.2.9` 和 `django==3.2.13`，前者命中，后者等于修复端点。再输入 `flask==3.0`，观察“包未收录”。
-3. 在“统计查询”切换 CVE 对齐、风险排名、修复时间线和证据覆盖。SQL 在 `backend/views.py`。
-4. 在云端终端运行 `python -m pytest -q` 验证页面和查询结果。
+1. 首页搜 **pillow**，选择 PyPI 的 Pillow。打开「只看有命中的版本」，点 **12.3.0** 查看公告、严重程度及已记录的修复版本。
+2. 从「公告目录」搜 `CVE-2021-44228`，查看 OSV 版本区间与 NVD 的产品配置，沿来源链接复核。
+3. 在「依赖检查」上传 UTF-8 的 `requirements.txt` 或固定版本的直接依赖 `pom.xml`，检查后导出 CSV。
+4. 在「统计查询」打开 Q6 下游依赖影响面和 Q9 Scorecard 分层，展开实际 SQL。
 
-## 数据与复现
+## 数据和验收
 
-`data/snapshot.json` 保留采集时间、OSV 修改时间、NVD 评分提供方、修复版本和 deps.dev 链接。刷新命令为 `python tools/collect.py`，成功后运行 `python -m backend.catalog`。导入器在一次事务中替换此课程专用的七张表。查询仅覆盖快照中的公告；未命中不能证明依赖安全。
+固定快照保存在 `data/library/`，包含 19,447 条去重公告、6,700 个软件包及 39,545 段区间。NVD 包含 66 条 CVE，依赖图取自 20 个根版本。版本列表来自 deps.dev 或 OSV 版本证据，具体来源显示在页面。结果覆盖本批数据。
 
-[修订方案、表关系与查询对照](docs/方案G-修订版.md)
+`python -m backend.library_db` 加载固定快照。相同快照会跳过重复导入。`python -m tools.collect_library` 可重新采集。`python -m pytest -q` 在云端运行测试。`python -m tools.verify_library` 重跑全量真实关联索引实验。`python -m tools.benchmark build/benchmark.json` 重跑独立的百万行合成实验。
 
 ## 提交材料
 
-- [课程报告（Word）](submission/VulnLensDB-report.docx) · [PDF 阅读版](submission/VulnLensDB-report.pdf)
-- [答辩演示（PowerPoint）](submission/VulnLensDB-defense.pptx) · [PDF 阅读版](submission/VulnLensDB-defense.pdf)
-- [MySQL 实验记录](submission/benchmark.json)，含完整执行计划及每次查询耗时。合成数据仅用于性能实验，业务页面使用三源真实快照。
+- [课程报告 Word](submission/VulnLensDB-report.docx) · [PDF](submission/VulnLensDB-report.pdf)
+- [答辩演示 PowerPoint](submission/VulnLensDB-defense.pptx) · [PDF](submission/VulnLensDB-defense.pdf)
+- [全量真实数据的索引实验](submission/library-evidence.json) · [百万行合成实验](submission/benchmark.json)
+- [扩展版实现说明](docs/implementation.md)
 
-在 **Actions → Build course materials → Run workflow** 可重新生成材料。报告、幻灯片和原始结果来自同一次运行。提交课程平台前请在 Word 中填写姓名、学号及个人贡献。
+报告保留了姓名、学号、组号和个人贡献栏。请在交课程平台前据实填写。
