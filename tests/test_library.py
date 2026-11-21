@@ -84,9 +84,28 @@ def test_package_home_and_version_check():
         assert links.packages.count("/packages/PyPI/pillow") == 1
         assert "Python 图片处理库" in listing
         detail = client.get(links.packages[0]).get_data(as_text=True)
-        assert 'id="releases"' in detail and "全部历史公告" in detail
+        assert 'id="releases"' in detail and "版本与漏洞" in detail
         check_page = client.get(links.packages[0], query_string={"version": "10.3.0"})
         assert check_page.status_code == 200
         assert re.search(r"10\.3\.0 命中 [0-9]+ 条公告", check_page.get_data(as_text=True))
         assert client.get(links.packages[0], query_string={"version": ">>"}).status_code == 400
         assert client.get("/library", query_string={"q": "44228"}).status_code == 200
+
+
+@pytest.mark.skipif(not os.getenv("DB_PASSWORD"), reason="requires MySQL snapshot")
+def test_package_versions_show_matching_release_counts():
+    from backend.library import package_advisories, release_findings
+    from backend.views import rows
+
+    with app.test_client() as client:
+        path = "/packages/PyPI/pillow"
+        filtered = client.get(path, query_string={"show": "affected"}).get_data(as_text=True)
+        assert "版本与漏洞" in filtered and "只看有命中的版本" in filtered
+        assert "show=affected" in filtered and "#version-result" in filtered
+        assert "0 条</td>" not in filtered
+        selected = client.get(path, query_string={"version": "10.3.0"}).get_data(as_text=True)
+        package_id = rows("SELECT id FROM lib_package WHERE ecosystem='PyPI' AND name='pillow'")[0]["id"]
+        result = release_findings("PyPI", "10.3.0", package_advisories(package_id))
+        assert sum(result["counts"].values()) == len(result["hits"]) > 0
+        assert f"10.3.0 命中 {len(result['hits'])} 条公告" in selected
+        assert "本区间修复版本" in selected

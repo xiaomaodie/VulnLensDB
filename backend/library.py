@@ -1,5 +1,6 @@
 """Views for the multi-ecosystem dataset. All filters are bound SQL parameters."""
 import csv
+from functools import lru_cache
 import io
 import json
 import re
@@ -17,6 +18,7 @@ ECOS=("PyPI","Maven","Go")
 LEVELS=("CRITICAL","HIGH","MODERATE","LOW","UNKNOWN")
 
 
+@lru_cache(maxsize=8192)
 def key_version(eco,value):
     if eco=="PyPI": return Version(value)
     if eco=="Go":
@@ -137,6 +139,41 @@ def package_search():
                            intros=PACKAGE_INTROS)
 
 
+VERSION_PAGE_SIZE = 15
+VERSION_SEVERITIES = ("CRITICAL", "HIGH", "MODERATE", "LOW", "UNKNOWN")
+
+
+def package_advisories(package_id):
+    advisories = rows("""SELECT a.id,a.title,a.severity,a.score,x.listed_versions
+        FROM lib_affected x JOIN lib_advisory a ON a.id=x.advisory_id
+        WHERE x.package_id=%s ORDER BY a.score DESC,a.id""", (package_id,))
+    spans = defaultdict(list)
+    for span in rows("""SELECT advisory_id,introduced,end_type,endpoint FROM lib_span
+                        WHERE package_id=%s""", (package_id,)):
+        spans[span["advisory_id"]].append(span)
+    return [(item, set(json.loads(item["listed_versions"])), spans[item["id"]])
+            for item in advisories]
+
+
+def release_findings(eco, version, advisories):
+    counts = dict.fromkeys(VERSION_SEVERITIES, 0)
+    hits, uncertain = [], []
+    for item, listed, spans in advisories:
+        status, fixes = classify(eco, version, listed, spans)
+        if status == "命中":
+            severity = item["severity"] if item["severity"] in counts else "UNKNOWN"
+            counts[severity] += 1
+            hits.append(dict(item, fixed=", ".join(fixes)))
+        elif status == "待核对":
+            uncertain.append(item)
+    return dict(hits=hits, uncertain=uncertain, counts=counts)
+
+
+def version_results(eco, releases, advisories):
+    return [dict(release, **release_findings(eco, release["version"], advisories))
+            for release in releases]
+
+
 @library.get("/packages/<eco>/<path:name>")
 def package_detail(eco, name):
     if eco not in ECOS or len(name) > 730:
@@ -147,43 +184,52 @@ def package_detail(eco, name):
     if not record:
         abort(404)
     package = record[0]
-    releases = rows("""SELECT version FROM lib_release WHERE package_id=%s
+    releases = rows("""SELECT version,published FROM lib_release WHERE package_id=%s
         ORDER BY published IS NULL,published DESC,version DESC""", (package["id"],))
+    advisories = package_advisories(package["id"])
+    listed_only = not releases
+    if listed_only:
+        # Some packages have OSV coverage but no deps.dev release listing in this snapshot.
+        candidates = set()
+        for _, listed, spans in advisories:
+            candidates.update(listed)
+            candidates.update(span["endpoint"] for span in spans if span["endpoint"])
+            candidates.update(span["introduced"] for span in spans if span["introduced"] != "0")
+        sortable, other = [], []
+        for value in candidates:
+            try:
+                sortable.append((key_version(eco, value), value))
+            except ValueError:
+                other.append(value)
+        versions = [value for _, value in sorted(sortable, reverse=True)] + sorted(other)
+        releases = [dict(version=value, published=None) for value in versions]
+    show = request.args.get("show", "")
     version = request.args.get("version", "").strip()
+    all_results = version_results(eco, releases, advisories) if show == "affected" else None
+    visible = [r for r in all_results if r["hits"]] if all_results is not None else releases
+    pages = max(1, (len(visible) + VERSION_PAGE_SIZE - 1) // VERSION_PAGE_SIZE)
+    page = max(1, min(request.args.get("page", 1, type=int), pages))
+    start = (page - 1) * VERSION_PAGE_SIZE
+    shown = visible[start:start + VERSION_PAGE_SIZE]
+    if all_results is None:
+        shown = version_results(eco, shown, advisories)
+
     error = None
-    hits, uncertain = [], []
+    selected = None
     if version:
         try:
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", version):
                 raise ValueError("Expected a fixed version")
-            pins = parse_pins(f"{package['name']}=={version}", eco)
-            if len(pins) != 1:
-                raise ValueError("Expected one version")
-            results = [result for result in scan(pins) if result[4]]
-            if results:
-                ids = list(dict.fromkeys(result[4] for result in results))
-                marks = ",".join(["%s"] * len(ids))
-                advisories = {a["id"]: a for a in rows(
-                    f"SELECT id,title,severity FROM lib_advisory WHERE id IN ({marks})", ids)}
-                for _, _, _, status, aid, score, fixed in results:
-                    item = dict(advisories[aid], score=score, fixed=fixed)
-                    (hits if status == "命中" else uncertain).append(item)
+            parse_pins(f"{package['name']}=={version}", eco)
+            selected = release_findings(eco, version, advisories)
         except ValueError:
             error = "请输入一个有效的固定版本号，例如 10.3.0。"
-    pages = max(1, (package["advisories"] + PACKAGE_PAGE_SIZE - 1) // PACKAGE_PAGE_SIZE)
-    page = max(1, min(request.args.get("page", 1, type=int), pages))
-    history = []
-    if not version or error:
-        history = rows("""SELECT a.id,a.title,a.severity,a.score
-            FROM lib_affected x JOIN lib_advisory a ON a.id=x.advisory_id
-            WHERE x.package_id=%s ORDER BY a.published DESC,a.id LIMIT %s OFFSET %s""",
-            (package["id"], PACKAGE_PAGE_SIZE, (page - 1) * PACKAGE_PAGE_SIZE))
     return render_template("package_detail.html", package=package, eco=eco,
                            ecosystem_label=PACKAGE_LABELS[eco],
                            intro=PACKAGE_INTROS.get((eco, package["name"])),
-                           releases=releases, version=version, error=error, hits=hits,
-                           uncertain=uncertain, history=history, page=page, pages=pages), 400 if error else 200
-
+                           releases=releases, shown=shown, listed_only=listed_only,
+                           version=version, error=error, selected=selected,
+                           show=show, page=page, pages=pages), 400 if error else 200
 
 
 @library.get("/library")

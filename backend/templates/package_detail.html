@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ package.name }}{% endblock %}
 {% block body %}
+{% set levels={'CRITICAL':'严重','HIGH':'高危','MODERATE':'中危','LOW':'低危','UNKNOWN':'等级未知'} %}
 <a href="{{ url_for('library.package_search',q=package.name,eco=eco) }}">← 返回软件包搜索</a>
 <section class="package-hero">
   <p class="muted">{{ ecosystem_label }}</p>
   <h1>{{ 'Pillow' if eco=='PyPI' and package.name=='pillow' else package.name }}</h1>
   {% if intro %}<p>{{ intro }}</p>{% endif %}
-  <form>
+  <form action="{{ url_for('library.package_detail',eco=eco,name=package.name,_anchor='version-result') }}">
     <label for="version">你正在用哪个版本？</label>
     <div class="package-search">
       <input id="version" name="version" list="releases" value="{{ version }}" placeholder="{{ '例如 '+releases[0].version if releases else '输入固定版本号' }}" required maxlength="200">
@@ -14,34 +15,52 @@
       <button>查这个版本</button>
     </div>
   </form>
-  {% if version %}<p class="package-examples"><a href="{{ url_for('library.package_detail',eco=eco,name=package.name) }}">查看这个包的全部历史公告</a></p>{% endif %}
 </section>
-{% if error %}<p role="alert">{{ error }}</p>{% endif %}
-{% set levels={'CRITICAL':'严重','HIGH':'高危','MODERATE':'中危','LOW':'低危','UNKNOWN':'等级未知'} %}
-{% if version and not error %}
-  <h2>{{ version }} 命中 {{ hits|length }} 条公告</h2>
-  {% if not hits %}<p>当前数据快照中没有确认命中的公告。</p>{% endif %}
-  {% for item in hits %}
+
+<section id="versions">
+  <div class="version-heading">
+    <h2>版本与漏洞 <small>{{ releases|length }} 个版本</small></h2>
+    <nav class="filters" aria-label="版本筛选">
+      <a {% if show!='affected' %}aria-current="page"{% endif %} href="{{ url_for('library.package_detail',eco=eco,name=package.name,_anchor='versions') }}">全部版本</a>
+      <a {% if show=='affected' %}aria-current="page"{% endif %} href="{{ url_for('library.package_detail',eco=eco,name=package.name,show='affected',_anchor='versions') }}">只看有命中的版本</a>
+    </nav>
+  </div>
+  <p class="muted">{{ '此包列出 OSV 公告中出现的版本与端点。' if listed_only else '版本列表来自 deps.dev 快照。' }} 漏洞数量按当前公告快照计算。</p>
+  {% if shown %}
+  <div class="scroll">
+    <table class="version-table">
+      <thead><tr><th scope="col">版本</th><th scope="col">发布日期（UTC）</th><th scope="col">命中公告</th><th scope="col">严重程度</th></tr></thead>
+      <tbody>{% for release in shown %}
+        <tr {% if release.version==version %}class="version-selected"{% endif %}>
+          <td><a href="{{ url_for('library.package_detail',eco=eco,name=package.name,version=release.version,show=show or none,page=page,_anchor='version-result') }}">{{ release.version }}</a></td>
+          <td>{{ release.published.date() if release.published else '—' }}</td>
+          <td>{{ release.hits|length }} 条{% if release.uncertain %}<small class="version-uncertain">另有 {{ release.uncertain|length }} 条待核对</small>{% endif %}</td>
+          <td>{% for level,count in release.counts.items() if count %}<span class="severity severity-{{ level|lower }}">{{ levels[level] }} {{ count }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}<p>{{ '没有符合条件的版本。' if releases else '当前快照暂无版本列表，可以在上方手动检查。' }}</p>{% endif %}
+  {% if pages>1 %}<nav class="filters version-pages" aria-label="版本分页">
+    {% if page>1 %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,version=version or none,show=show or none,page=page-1,_anchor='versions') }}">上一页</a>{% endif %}
+    <span>第 {{ page }} / {{ pages }} 页</span>
+    {% if page<pages %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,version=version or none,show=show or none,page=page+1,_anchor='versions') }}">下一页</a>{% endif %}
+  </nav>{% endif %}
+</section>
+<section id="version-result" class="version-result">
+{% if error %}<p role="alert">{{ error }}</p>{% elif selected is not none %}
+  <h2>{{ version }} 命中 {{ selected.hits|length }} 条公告</h2>
+  {% if not selected.hits %}<p>当前数据快照中没有确认命中的公告。</p>{% endif %}
+  {% for item in selected.hits %}
   <article><div><small>{{ item.id }}</small><h3><a href="{{ url_for('library.advisory',aid=item.id) }}">{{ item.title }}</a></h3>
     <span>本区间修复版本 {{ item.fixed or '暂无记录' }}</span></div>
-    <b>{{ levels.get(item.severity,item.severity) }}{% if item.score is not none %} · {{ item.score }}{% endif %}</b></article>
+    <span class="severity severity-{{ item.severity|lower }}">{{ levels.get(item.severity,item.severity) }}{% if item.score is not none %} · {{ item.score }}{% endif %}</span></article>
   {% endfor %}
-  {% if uncertain %}
-  <details><summary>{{ uncertain|length }} 条公告需要核对版本范围</summary>
-    <ul>{% for item in uncertain %}<li><a href="{{ url_for('library.advisory',aid=item.id) }}">{{ item.title }}</a></li>{% endfor %}</ul>
+  {% if selected.uncertain %}
+  <details><summary>{{ selected.uncertain|length }} 条公告需要核对版本范围</summary>
+    <ul>{% for item in selected.uncertain %}<li><a href="{{ url_for('library.advisory',aid=item.id) }}">{{ item.title }}</a></li>{% endfor %}</ul>
   </details>
   {% endif %}
-{% else %}
-  <h2>全部历史公告 <small>{{ package.advisories }} 条</small></h2>
-  <p>这些公告可能影响该包的不同版本。输入版本后只看与该版本相关的结果。</p>
-  {% for item in history %}
-  <article><div><small>{{ item.id }}</small><h3><a href="{{ url_for('library.advisory',aid=item.id) }}">{{ item.title }}</a></h3></div>
-    <b>{{ levels.get(item.severity,item.severity) }}{% if item.score is not none %} · {{ item.score }}{% endif %}</b></article>
-  {% else %}<p>当前数据快照未收录这个包的公告。</p>{% endfor %}
-  {% if pages>1 %}<nav class="filters" aria-label="历史公告分页">
-    {% if page>1 %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,page=page-1) }}">上一页</a>{% endif %}
-    <span>第 {{ page }} / {{ pages }} 页</span>
-    {% if page<pages %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,page=page+1) }}">下一页</a>{% endif %}
-  </nav>{% endif %}
 {% endif %}
+</section>
 {% endblock %}
