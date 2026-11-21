@@ -266,21 +266,57 @@ def catalog():
     return render_template("library.html",entries=entries,m=metrics,n=total,page=page,filters=filters,ecos=ECOS,levels=LEVELS)
 
 
+# Reviewed plain-language summaries for selected demonstration advisories.
+ADVISORY_SUMMARIES = {
+    "GHSA-5x8w-8jj5-q52h": (
+        "Pillow 处理 FlashPix 图片时可能执行恶意代码",
+        "应用用受影响的 Pillow 处理特制 FlashPix（FPX）图片时，可能崩溃或执行恶意代码。"
+        "如果你的应用允许上传或自动处理图片，优先检查正在用的版本。",
+    ),
+}
+
+
 @library.get("/library/advisory/<aid>")
 def advisory(aid):
-    a=rows("""SELECT a.* FROM lib_alias l JOIN lib_advisory a ON a.id=l.advisory_id WHERE l.alias=%s""",(aid,))
-    if not a:abort(404)
-    aid=a[0]["id"]
-    links=rows("SELECT alias,osv_record FROM lib_alias WHERE advisory_id=%s ORDER BY alias",(aid,))
-    spans=rows("""SELECT p.ecosystem,p.name,s.introduced,s.end_type,s.endpoint,
-        JSON_LENGTH(x.listed_versions) listed FROM lib_affected x JOIN lib_package p ON p.id=x.package_id
-        LEFT JOIN lib_span s ON s.package_id=x.package_id AND s.advisory_id=x.advisory_id
-        WHERE x.advisory_id=%s ORDER BY p.ecosystem,p.name,s.id""",(aid,))
-    nvd=rows("SELECT n.* FROM lib_nvd n JOIN lib_alias l ON l.alias=n.cve WHERE l.advisory_id=%s",(aid,))
-    cp=rows("""SELECT c.cve,c.rule_json FROM lib_cpe c JOIN lib_alias l ON l.alias=c.cve
-               WHERE l.advisory_id=%s ORDER BY c.id""",(aid,))
-    return render_template("library_detail.html",a=a[0],links=links,spans=spans,nvd=nvd,
-                           cpes=[(r["cve"],json.loads(r["rule_json"])) for r in cp])
+    records = rows("""SELECT a.* FROM lib_alias l JOIN lib_advisory a ON a.id=l.advisory_id
+        WHERE l.alias=%s""", (aid,))
+    if not records:
+        abort(404)
+    record = records[0]
+    aid = record["id"]
+    links = rows("SELECT alias,osv_record FROM lib_alias WHERE advisory_id=%s ORDER BY alias", (aid,))
+    packages = rows("""SELECT p.id,p.ecosystem,p.name,x.listed_versions
+        FROM lib_affected x JOIN lib_package p ON p.id=x.package_id
+        WHERE x.advisory_id=%s ORDER BY p.ecosystem,p.name""", (aid,))
+    ranges = defaultdict(list)
+    for span in rows("""SELECT package_id,introduced,end_type,endpoint FROM lib_span
+                       WHERE advisory_id=%s ORDER BY id""", (aid,)):
+        ranges[span["package_id"]].append(span)
+    for package in packages:
+        package["spans"] = ranges[package["id"]]
+        package["listed"] = json.loads(package["listed_versions"])
+    selected = request.args.get("package", type=int)
+    package = next((p for p in packages if p["id"] == selected), packages[0] if packages else None)
+    version = request.args.get("version", "").strip()
+    error, status, fixes = None, None, []
+    if version and package:
+        try:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", version):
+                raise ValueError("Expected one version")
+            parse_pins(f"{package['name']}=={version}", package["ecosystem"])
+            status, fixes = classify(package["ecosystem"], version, set(package["listed"]), package["spans"])
+        except ValueError:
+            error = "请输入一个有效的固定版本号，例如 12.3.0。"
+    nvd = rows("""SELECT n.* FROM lib_nvd n JOIN lib_alias l ON l.alias=n.cve
+                    WHERE l.advisory_id=%s""", (aid,))
+    cp = rows("""SELECT c.cve,c.rule_json FROM lib_cpe c JOIN lib_alias l ON l.alias=c.cve
+                 WHERE l.advisory_id=%s ORDER BY c.id""", (aid,))
+    cve = next((l["alias"] for l in links if l["alias"].startswith("CVE-")), None)
+    summary = next((ADVISORY_SUMMARIES[l["alias"]] for l in links if l["alias"] in ADVISORY_SUMMARIES), None)
+    return render_template("library_detail.html", a=record, links=links, packages=packages,
+                           package=package, version=version, error=error, status=status, fixes=fixes,
+                           cve=cve, summary=summary, nvd=nvd,
+                           cpes=[(r["cve"], json.loads(r["rule_json"])) for r in cp])
 
 
 def parse_pins(text,eco):

@@ -52,13 +52,13 @@
   <h2>{{ version }} 命中 {{ selected.hits|length }} 条公告</h2>
   {% if not selected.hits %}<p>当前数据快照中没有确认命中的公告。</p>{% endif %}
   {% for item in selected.hits %}
-  <article><div><small>{{ item.id }}</small><h3><a href="{{ url_for('library.advisory',aid=item.id) }}">{{ item.title }}</a></h3>
+  <article><div><small>{{ item.id }}</small><h3><a href="{{ url_for('library.advisory',aid=item.id,package=package.id,version=version) }}">{{ item.title }}</a></h3>
     <span>本区间修复版本 {{ item.fixed or '暂无记录' }}</span></div>
     <span class="severity severity-{{ item.severity|lower }}">{{ levels.get(item.severity,item.severity) }}{% if item.score is not none %} · {{ item.score }}{% endif %}</span></article>
   {% endfor %}
   {% if selected.uncertain %}
   <details><summary>{{ selected.uncertain|length }} 条公告需要核对版本范围</summary>
-    <ul>{% for item in selected.uncertain %}<li><a href="{{ url_for('library.advisory',aid=item.id) }}">{{ item.title }}</a></li>{% endfor %}</ul>
+    <ul>{% for item in selected.uncertain %}<li><a href="{{ url_for('library.advisory',aid=item.id,package=package.id,version=version) }}">{{ item.title }}</a></li>{% endfor %}</ul>
   </details>
   {% endif %}
 {% endif %}

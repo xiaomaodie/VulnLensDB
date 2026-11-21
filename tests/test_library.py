@@ -109,3 +109,17 @@ def test_package_versions_show_matching_release_counts():
         assert sum(result["counts"].values()) == len(result["hits"]) > 0
         assert f"10.3.0 命中 {len(result['hits'])} 条公告" in selected
         assert "本区间修复版本" in selected
+
+
+@pytest.mark.skipif(not os.getenv("DB_PASSWORD"), reason="requires MySQL snapshot")
+def test_advisory_shows_actionable_fix_and_version_result():
+    with app.test_client() as client:
+        url = "/library/advisory/GHSA-5x8w-8jj5-q52h"
+        affected = client.get(url, query_string={"version": "12.3.0"})
+        fixed = client.get(url, query_string={"version": "13.0.0"})
+    assert affected.status_code == fixed.status_code == 200
+    page = affected.get_data(as_text=True)
+    assert "Pillow 处理 FlashPix 图片时可能执行恶意代码" in page
+    assert "pillow 12.3.0 受这条漏洞影响" in page and "13.0.0" in page
+    assert "<summary>原始公告与数据来源</summary>" in page
+    assert "pillow 13.0.0 未命中这条公告" in fixed.get_data(as_text=True)
