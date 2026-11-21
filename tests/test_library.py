@@ -102,7 +102,7 @@ def test_package_versions_show_matching_release_counts():
         filtered = client.get(path, query_string={"show": "affected"}).get_data(as_text=True)
         assert "版本与漏洞" in filtered and "只看有命中的版本" in filtered
         assert "show=affected" in filtered and "#version-result" in filtered
-        assert "0 条</td>" not in filtered
+        assert not re.search(r"<td>0 \u6761(?:</td>|<small)", filtered)
         selected = client.get(path, query_string={"version": "10.3.0"}).get_data(as_text=True)
         package_id = rows("SELECT id FROM lib_package WHERE ecosystem='PyPI' AND name='pillow'")[0]["id"]
         result = release_findings("PyPI", "10.3.0", package_advisories(package_id))
