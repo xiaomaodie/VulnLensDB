@@ -22,25 +22,25 @@
     <h2>版本与漏洞 <small>{{ releases|length }} 个版本</small></h2>
     <nav class="filters" aria-label="版本筛选">
       <a {% if show!='affected' %}aria-current="page"{% endif %} href="{{ url_for('library.package_detail',eco=eco,name=package.name,_anchor='versions') }}">全部版本</a>
-      <a {% if show=='affected' %}aria-current="page"{% endif %} href="{{ url_for('library.package_detail',eco=eco,name=package.name,show='affected',_anchor='versions') }}">只看有命中的版本</a>
+      <a {% if show=='affected' %}aria-current="page"{% endif %} href="{{ url_for('library.package_detail',eco=eco,name=package.name,show='affected',_anchor='versions') }}">只看有已知问题的版本</a>
     </nav>
   </div>
-  <p class="muted">{{ '此包列出 OSV 公告中出现的版本与端点。' if listed_only else '版本列表来自 deps.dev 快照。' }} 漏洞数量按当前公告快照计算。</p>
+  <p class="muted">{{ '这里只列出了安全公告提到的版本。' if listed_only else '版本列表来自 deps.dev。' }} 问题数量根据本站已收录的安全公告统计。</p>
   {% if shown %}
   <div class="scroll">
     <table class="version-table">
-      <thead><tr><th scope="col">版本</th><th scope="col">发布日期（UTC）</th><th scope="col">命中公告</th><th scope="col">严重程度</th></tr></thead>
+      <thead><tr><th scope="col">版本</th><th scope="col">发布日期（UTC）</th><th scope="col">已知安全问题</th><th scope="col">严重程度</th></tr></thead>
       <tbody>{% for release in shown %}
         <tr>
           <td><a href="{{ url_for('library.package_version',eco=eco,name=package.name,version=release.version,show=show or none,page=page) }}">{{ release.version }}</a></td>
           <td>{{ release.published.date() if release.published else '—' }}</td>
-          <td>{{ release.hits|length }} 条{% if release.uncertain %}<small class="version-uncertain">另有 {{ release.uncertain|length }} 条待核对</small>{% endif %}</td>
+          <td>{{ release.hits|length }} 个{% if release.uncertain %}<small class="version-uncertain">另有 {{ release.uncertain|length }} 个暂时无法判断</small>{% endif %}</td>
           <td>{% for level,count in release.counts.items() if count %}<span class="severity severity-{{ level|lower }}">{{ levels[level] }} {{ count }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
         </tr>
       {% endfor %}</tbody>
     </table>
   </div>
-  {% else %}<p>{{ '没有符合条件的版本。' if releases else '当前快照暂无版本列表，可以在上方手动检查。' }}</p>{% endif %}
+  {% else %}<p>{{ '没有符合条件的版本。' if releases else '本站暂未收录版本列表，可以在上方手动检查。' }}</p>{% endif %}
   {% if pages>1 %}<nav class="filters version-pages" aria-label="版本分页">
     {% if page>1 %}<a href="{{ url_for('library.package_detail',eco=eco,name=package.name,show=show or none,page=page-1,_anchor='versions') }}">上一页</a>{% endif %}
     <span>第 {{ page }} / {{ pages }} 页</span>
