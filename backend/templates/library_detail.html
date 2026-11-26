@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "nvd_products.html" import product_table %}
 {% block title %}{{ summary[0] if summary else a.title }}{% endblock %}
 {% block body %}
 {% set levels={'CRITICAL':'严重','HIGH':'高危','MODERATE':'中危','MEDIUM':'中危','LOW':'低危','UNKNOWN':'等级未知'} %}
@@ -6,7 +7,7 @@
   <a class="advisory-back" href="{{url_for('library.catalog')}}">← 返回公告目录</a>
   <header class="advisory-intro">
     <div class="advisory-meta"><span class="severity severity-{{a.severity|lower}}">{{levels.get(a.severity,a.severity)}}</span>
-    {% if a.score is not none %}<span>严重度评分 <b>{{a.score}} / 10</b></span>{% endif %}
+    {% if a.score is not none %}<span>软件包公告评分 <b>{{a.score}} / 10</b></span>{% endif %}
     <span>发布于 {{a.published.date()}}</span>{% if cve %}<span>{{cve}}</span>{% endif %}</div>
     <h1>{{ summary[0] if summary else a.title }}</h1>
     {% if summary %}<p>{{summary[1]}}</p>{% endif %}
@@ -17,7 +18,7 @@
     <h2>哪些版本受影响？</h2>
     <p><a class="advisory-package" href="{{url_for('library.package_detail',eco=p.ecosystem,name=p.name)}}">{{p.name}}</a> <span class="muted">{{p.ecosystem}}</span></p>
     {% if p.spans %}<div class="scroll"><table>
-      <thead><tr><th scope="col">公告列出的受影响版本</th><th scope="col">这条公告的修复版本</th></tr></thead>
+      <thead><tr><th scope="col">OSV 收录的受影响版本</th><th scope="col">这条公告的修复版本</th></tr></thead>
       <tbody>{% for r in p.spans %}<tr>
         <td>{% if r.introduced!='0' %}<strong>{{r.introduced}}</strong> 起，{% endif %}{% if r.end_type in ('fixed','limit') %}低于 <strong>{{r.endpoint}}</strong>{% elif r.end_type=='last_affected' %}截至 <strong>{{r.endpoint}}</strong>（含）{% else %}公告未给结束版本{% endif %}</td>
         <td>{% if r.end_type=='fixed' %}<strong class="advisory-fix">{{r.endpoint}}</strong>{% else %}暂无记录{% endif %}</td>
@@ -47,6 +48,21 @@
     </div>{% endif %}
   </section>{% endif %}
 
+  <section class="advisory-box">
+    <h2>我的部署环境也受影响吗？</h2>
+    {% for n in nvd %}
+      <h3>{{ n.cve }} 的产品记录</h3>
+      {% if n.score is not none %}<p>NVD 收录的严重度评分：<strong>{{ n.score }} / 10</strong>{% if n.author %}（{{ n.author }}）{% endif %}</p>{% endif %}
+      {% set rules = cpes|selectattr('0','equalto',n.cve)|map(attribute='1')|list %}
+      {% if rules %}<p>对照自己部署的产品和版本。标为“环境条件”的项目需要结合原始记录中的其他条件判断。</p>
+      {{ product_table(rules[:5]) }}
+      {% else %}<p>本站收录了该漏洞的 NVD 说明，但记录中没有可展示的产品条件。</p>{% endif %}
+      <a href="{{url_for('library.official',cve=n.cve)}}">查看完整产品记录{% if rules %}（{{rules|length}} 项条件）{% endif %}</a>
+    {% else %}
+      <p>本站目前只有软件包一侧的资料。上方可以检查版本；具体部署环境是否受影响，还缺少对应的 NVD 产品记录。</p>
+      {% if cve %}<a href="https://nvd.nist.gov/vuln/detail/{{cve}}">到 NVD 查询 {{cve}} ↗</a>{% endif %}
+    {% endfor %}
+  </section>
   <details class="advisory-sources">
     <summary>原始公告与数据来源</summary>
     {% if summary %}<p><strong>英文原标题</strong> {{a.title}}</p>{% endif %}
@@ -61,12 +77,6 @@
     {% for l in links if not l.osv_record and not l.alias.startswith(('GHSA-', 'CVE-')) %}
       <p>{% if l.alias.startswith('BIT-') %}Bitnami 给这个问题的编号{% else %}同一问题的其他编号{% endif %}：<code>{{l.alias}}</code>（可复制搜索）</p>
     {% endfor %}
-    {% if nvd or cve %}<h3>查看产品影响范围（NVD）</h3>{% endif %}
-    {% for n in nvd %}<p><a href="{{url_for('library.official',cve=n.cve)}}">{{n.cve}} 的产品记录</a>{% if n.score is not none %} · 严重度评分 {{n.score}}{% endif %}</p><p>{{n.description}}</p>
-    {% else %}{% if cve %}<p>本次快照未包含这条 CVE 的 NVD 记录。<a href="https://nvd.nist.gov/vuln/detail/{{cve}}">去 NVD 查询 {{cve}} ↗</a></p>{% endif %}{% endfor %}
-    {% if cpes %}<details><summary>查看 {{cpes|length}} 条产品匹配项（CPE）</summary><p>这些条件描述 NVD 中的产品和环境。请在原始记录中核对完整条件。</p>
-      {% for _,r in cpes %}<p><code>{{r.criteria}}</code> · {{'受影响产品' if r.vulnerable else '环境条件'}}{% for k in ['versionStartIncluding','versionStartExcluding','versionEndIncluding','versionEndExcluding'] %}{% if r[k] %} · {{k}} {{r[k]}}{% endif %}{% endfor %}</p>{% endfor %}
-    </details>{% endif %}
   </details>
 </div>
 {% endblock %}
