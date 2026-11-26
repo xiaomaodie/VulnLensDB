@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}查软件包{% endblock %}
 {% block body %}
+{% set version = request.args.get("version", "")|trim %}
 <section class="package-hero">
   <h1>查软件包</h1>
-  <p>输入包名，找到软件包后选择你正在使用的版本，查看有哪些已知漏洞。</p>
+  <p>输入项目用到的软件包。如果知道版本号，也可以一起填写，选中软件包后就能看到安全问题和修复建议。</p>
   <form action="{{ url_for('library.package_search') }}">
     <label for="q">软件包名称</label>
     <div class="package-search">
@@ -14,21 +15,23 @@
       </select>
       <button>搜索软件包</button>
     </div>
+    <label for="package-version">正在使用的版本（选填）</label>
+    <input id="package-version" name="version" value="{{ version }}" maxlength="200" placeholder="例如 12.1.1">
   </form>
   {% if not q %}<p class="package-examples">试试
     {% for ex in ['pillow','django','log4j'] %}<a href="{{ url_for('library.package_search',q=ex) }}">{{ ex }}</a>{% endfor %}
-  </p>{% else %}
-  <p class="package-examples"><a href="{{ url_for('library.catalog',q=q,eco=eco) }}">在公告目录中搜索“{{ q }}”</a></p>
+  </p>
   {% endif %}
+  <p>不清楚项目用了哪些包？<a href="{{ url_for('library.check') }}">上传项目的依赖清单，一起检查</a></p>
 </section>
 <h2>{{ '搜索结果' if q else '软件包目录' }} <small>{{ '{:,}'.format(total) }} 个包</small></h2>
 <ul class="package-list">
 {% for pkg in packages %}
-  <li><a href="{{ url_for('library.package_detail',eco=pkg.ecosystem,name=pkg.name) }}">
+  <li><a href="{{ url_for('library.package_version',eco=pkg.ecosystem,name=pkg.name,version=version) if version else url_for('library.package_detail',eco=pkg.ecosystem,name=pkg.name) }}">
     <div><small>{{ labels[pkg.ecosystem] }}</small><strong>{{ 'Pillow' if pkg.ecosystem=='PyPI' and pkg.name=='pillow' else pkg.name }}</strong>
       {% if intros.get((pkg.ecosystem,pkg.name)) %}<span>{{ intros[(pkg.ecosystem,pkg.name)] }}</span>{% endif %}
     </div>
-    <span class="package-total">{{ pkg.advisories }} 条历史公告 <span aria-hidden="true">→</span></span>
+    <span class="package-total">{{ "检查 " ~ version if version else "查看版本" }} <span aria-hidden="true">→</span></span>
   </a></li>
 {% else %}
   <li>没有搜到这个包。可以试试更短的名称或切换生态。</li>
@@ -36,9 +39,9 @@
 </ul>
 {% if pages>1 %}
 <nav class="filters" aria-label="软件包分页">
-  {% if page>1 %}<a href="{{ url_for('library.package_search',q=q,eco=eco,page=page-1) }}">上一页</a>{% endif %}
+  {% if page>1 %}<a href="{{ url_for('library.package_search',q=q,eco=eco,version=version or none,page=page-1) }}">上一页</a>{% endif %}
   <span>第 {{ page }} / {{ pages }} 页</span>
-  {% if page<pages %}<a href="{{ url_for('library.package_search',q=q,eco=eco,page=page+1) }}">下一页</a>{% endif %}
+  {% if page<pages %}<a href="{{ url_for('library.package_search',q=q,eco=eco,version=version or none,page=page+1) }}">下一页</a>{% endif %}
 </nav>
 {% endif %}
 {% endblock %}
