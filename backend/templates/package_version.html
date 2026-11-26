@@ -17,9 +17,35 @@
   </form>
 </section>
 
-{
 <section id="version-result" class="version-result">
 {% if error %}<p role="alert">{{ error }}</p>{% elif selected is not none %}
+  {% if selected.hits %}
+  <section aria-labelledby="upgrade-title">
+    <h2 id="upgrade-title">修复建议</h2>
+    {% if advice %}
+    <p><strong>建议从 {{ version }} 升级到 {{ advice.target }}</strong></p>
+    <p>按当前数据库核对，升级后可解决 {{ advice.resolved }} 条已命中公告。</p>
+    {% if advice.command %}
+    <p>在使用 {{ package.name }} 的项目环境中运行</p>
+    <pre><code id="upgrade-command">{{ advice.command }}</code></pre>
+    <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('upgrade-command').textContent).then(() => this.textContent='已复制').catch(() => this.textContent='请选中命令复制')">复制命令</button>
+    {% elif eco == 'Maven' %}
+    <p>在项目的 Maven 依赖配置中，将 <code>{{ package.name }}</code> 的版本改为 <code>{{ advice.target }}</code>，然后重新构建并运行测试。</p>
+    {% else %}
+    <p>将项目使用的 {{ package.name }} 更新到 <code>{{ advice.target }}</code>，然后重新构建并运行测试。</p>
+    {% endif %}
+    <p><a href="{{ url_for('library.package_version',eco=eco,name=package.name,version=advice.target) }}">查看 {{ advice.target }} 的核对结果</a></p>
+    {% if advice.remaining or advice.uncertain %}
+    <details><summary>升级后仍命中 {{ advice.remaining|length }} 条，待核对 {{ advice.uncertain|length }} 条</summary><ul>
+    {% for label, items in [('仍命中', advice.remaining), ('待核对', advice.uncertain)] %}
+    {% for item in items %}<li>{{ label }} · <a href="{{ url_for('library.advisory',aid=item.id,package=package.id,version=advice.target) }}">{{ item.title }}</a></li>{% endfor %}
+    {% endfor %}</ul></details>
+    {% endif %}
+    {% else %}
+    <p>现有版本记录不足以推荐一次能减少已知漏洞的升级。请打开下方命中的公告，查看维护者列出的修复版本或临时处理办法。</p>
+    {% endif %}
+  </section>
+  {% endif %}
   <h2>{{ version }} 命中 {{ selected.hits|length }} 条公告</h2>
   {% if not selected.hits %}<p>当前数据快照中没有确认命中的公告。</p>{% endif %}
   {% for item in selected.hits %}
