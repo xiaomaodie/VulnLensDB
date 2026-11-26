@@ -1,1 +1,9 @@
-{% extends "base.html" %}{% block body %}<h1>{{a.cve}}</h1><p>{{a.description}}</p><p>CVSS {{a.score if a.score is not none else '缺失'}} · {{a.author or '未给出'}} · {{a.published}}</p><a href="https://nvd.nist.gov/vuln/detail/{{a.cve}}">NVD 原始记录 ↗</a><h2>CPE 配置项</h2>{% for r in cpes %}<p><code>{{r|tojson}}</code></p>{% else %}<p>该记录未给出 CPE 匹配项。</p>{% endfor %}{% endblock %}
+{% extends "base.html" %}
+{% from 'nvd_products.html' import product_table %}
+{% block title %}{{ a.cve }} 的产品影响范围{% endblock %}
+{% block body %}<h1>{{ a.cve }} 的产品影响范围</h1>
+<p>{{ a.description }}</p>
+{% if a.score is not none %}<p>NVD 收录的严重度评分：{{ a.score }} / 10{% if a.author %}（评分提供方：{{ a.author }}）{% endif %}</p>{% endif %}
+{% if cpes %}{{ product_table(cpes) }}<p>一个漏洞可能需要同时满足多个条件。核实部署环境时，请查看原始记录中的完整组合。</p>
+<details><summary>查看原始产品条件</summary>{% for r in cpes %}<p><code>{{r|tojson}}</code></p>{% endfor %}</details>{% else %}<p>本站收录的这条记录没有列出具体产品条件。</p>{% endif %}
+<a href="https://nvd.nist.gov/vuln/detail/{{a.cve}}">查看 NVD 原始记录 ↗</a>{% endblock %}
