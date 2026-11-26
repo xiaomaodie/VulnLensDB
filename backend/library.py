@@ -190,19 +190,73 @@ def package_version(eco, name):
     return render_package_version(eco, find_package(eco, name), request.args.get("version", "").strip())
 
 
+def upgrade_advice(eco, package, version, selected, advisories):
+    if not selected["hits"]:
+        return None
+    try:
+        current = key_version(eco, version)
+    except ValueError:
+        return None
+    versions = {row["version"] for row in rows(
+        "SELECT version FROM lib_release WHERE package_id=%s", (package["id"],))}
+    for _, _, spans in advisories:
+        versions.update(s["endpoint"] for s in spans if s["end_type"] == "fixed")
+    candidates = []
+    for value in versions:
+        if not value or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", value):
+            continue
+        try:
+            key = key_version(eco, value)
+        except ValueError:
+            continue
+        if eco == "PyPI" and (key.is_prerelease or key.is_devrelease or key.local):
+            continue
+        if eco == "Go" and key.prerelease:
+            continue
+        if key > current:
+            candidates.append((key, value))
+
+    hits = {item["id"] for item in selected["hits"]}
+    unknown = {item["id"] for item in selected["uncertain"]}
+    best = None
+    for _, target in sorted(candidates):
+        result = release_findings(eco, target, advisories)
+        remaining = {item["id"] for item in result["hits"]}
+        unresolved = {item["id"] for item in result["uncertain"]}
+        if not remaining < hits or not unresolved <= unknown:
+            continue
+        rank = (len(remaining), len(unresolved))
+        if best is None or rank < best["rank"]:
+            best = dict(target=target, rank=rank, resolved=len(hits - remaining),
+                        remaining=result["hits"], uncertain=result["uncertain"])
+        if rank == (0, 0):
+            break
+    if best:
+        name = package["name"]
+        if eco == "PyPI" and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+            best["command"] = f'python -m pip install --upgrade "{name}=={best["target"]}"'
+        elif eco == "Go" and best["target"].startswith("v") and re.fullmatch(
+                r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/[A-Za-z0-9._~/-]+", name):
+            best["command"] = f'go get {name}@{best["target"]}'
+    return best
+
+
 def render_package_version(eco, package, version):
     error = None
     selected = None
+    advice = None
     try:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!_+\-]{0,199}", version):
             raise ValueError("Expected a fixed version")
         parse_pins(f"{package['name']}=={version}", eco)
-        selected = release_findings(eco, version, package_advisories(package["id"]))
+        advisories = package_advisories(package["id"])
+        selected = release_findings(eco, version, advisories)
+        advice = upgrade_advice(eco, package, version, selected, advisories)
     except ValueError:
         error = "请输入一个有效的固定版本号，例如 10.3.0。"
     return render_template("package_version.html", package=package, eco=eco,
                            ecosystem_label=PACKAGE_LABELS[eco],
-                           version=version, error=error, selected=selected,
+                           version=version, error=error, selected=selected, advice=advice,
                            show=request.args.get("show", ""),
                            page=request.args.get("page", 1, type=int)), 400 if error else 200
 
