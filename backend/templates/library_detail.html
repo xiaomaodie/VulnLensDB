@@ -50,10 +50,18 @@
   <details class="advisory-sources">
     <summary>原始公告与数据来源</summary>
     {% if summary %}<p><strong>英文原标题</strong> {{a.title}}</p>{% endif %}
-    <h3>OSV 开源漏洞记录</h3>
-    <p>本页的受影响版本与修复版本取自这些公告。CVE、GHSA 等是同一漏洞在不同数据库里的编号。</p>
-    <ul>{% for l in links %}<li>{% if l.osv_record %}<a href="https://osv.dev/vulnerability/{{l.alias}}">{{l.alias}} ↗</a>{% else %}{{l.alias}}{% endif %}{% if l.alias.startswith('GHSA-') %} · <a href="https://github.com/advisories/{{l.alias}}">GitHub 原始公告</a>{% endif %}</li>{% endfor %}</ul>
-    {% if nvd or cve %}<h3>NVD 产品记录</h3>{% endif %}
+    <h3>查看这个问题的原始记录</h3>
+    <ul>
+    {% for l in links %}
+      {% if l.osv_record %}<li><a href="https://osv.dev/vulnerability/{{l.alias}}">查看受影响版本（{{l.alias}}）</a></li>{% endif %}
+      {% if l.alias.startswith('GHSA-') %}<li><a href="https://github.com/advisories/{{l.alias}}">阅读 GitHub 安全公告（{{l.alias}}）</a></li>
+      {% elif l.alias.startswith('CVE-') %}<li><a href="https://www.cve.org/CVERecord?id={{l.alias}}">查询通用漏洞编号（{{l.alias}}）</a></li>{% endif %}
+    {% endfor %}
+    </ul>
+    {% for l in links if not l.osv_record and not l.alias.startswith(('GHSA-', 'CVE-')) %}
+      <p>{% if l.alias.startswith('BIT-') %}Bitnami 给这个问题的编号{% else %}同一问题的其他编号{% endif %}：<code>{{l.alias}}</code>（可复制搜索）</p>
+    {% endfor %}
+    {% if nvd or cve %}<h3>查看产品影响范围（NVD）</h3>{% endif %}
     {% for n in nvd %}<p><a href="{{url_for('library.official',cve=n.cve)}}">{{n.cve}} 的产品记录</a>{% if n.score is not none %} · 严重度评分 {{n.score}}{% endif %}</p><p>{{n.description}}</p>
     {% else %}{% if cve %}<p>本次快照未包含这条 CVE 的 NVD 记录。<a href="https://nvd.nist.gov/vuln/detail/{{cve}}">去 NVD 查询 {{cve}} ↗</a></p>{% endif %}{% endfor %}
     {% if cpes %}<details><summary>查看 {{cpes|length}} 条产品匹配项（CPE）</summary><p>这些条件描述 NVD 中的产品和环境。请在原始记录中核对完整条件。</p>
