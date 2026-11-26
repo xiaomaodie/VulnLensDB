@@ -418,11 +418,11 @@ def parse_pins(text,eco):
     return pins
 
 
-def scan(pins):
+def scan(pins, recommendations=None):
     keys=sorted({(e,n) for e,n,_ in pins})
     marks=",".join(["(%s,%s)"]*len(keys));params=[x for pair in keys for x in pair]
     scope=" WHERE (p.ecosystem,p.name) IN ("+marks+")"
-    entries=rows("""SELECT p.ecosystem,p.name,x.advisory_id,x.listed_versions,a.score,a.severity
+    entries=rows("""SELECT p.id AS package_id,p.ecosystem,p.name,x.advisory_id,x.listed_versions,a.score,a.severity
         FROM lib_package p LEFT JOIN lib_affected x ON x.package_id=p.id
         LEFT JOIN lib_advisory a ON a.id=x.advisory_id"""+scope+" ORDER BY a.score DESC,a.id",params)
     spans=rows("""SELECT p.ecosystem,p.name,s.advisory_id,s.introduced,s.end_type,s.endpoint
@@ -436,13 +436,25 @@ def scan(pins):
     for e,n,v in pins:
         candidates=packages.get((e,n),[])
         found=False
+        hits, uncertain, advisories = [], [], []
         for r in candidates:
             aid=r["advisory_id"]
             if not aid:continue
             status,fixed=classify(e,v,r["listed"],ranges[(e,n,aid)])
+            if recommendations is not None:
+                item = dict(id=aid, severity=r["severity"])
+                advisories.append((item, r["listed"], ranges[(e,n,aid)]))
+                if status == "命中":
+                    hits.append(item)
+                elif status == "待核对":
+                    uncertain.append(item)
             if status in ("命中","待核对"):
                 result.append((e,n,v,status,aid,r["score"],", ".join(fixed)))
                 found=True
+        if hits and (e,n,v) not in recommendations:
+            recommendations[e,n,v] = upgrade_advice(
+                e, dict(id=candidates[0]["package_id"], name=n), v,
+                dict(hits=hits, uncertain=uncertain), advisories)
         if not found: result.append((e,n,v,"本快照未命中" if candidates else "包未收录","",None,""))
     return result
 
@@ -453,13 +465,14 @@ def check():
     from xml.etree.ElementTree import ParseError
     eco=request.form.get("eco","PyPI")
     raw=request.form.get("pins","django==3.2.9\ndjango==3.2.13");result=[];error=None
+    recommendations = {}
     if request.method=="POST":
         try:
             if eco not in ECOS:raise ValueError("未知生态。")
             f=request.files.get("upload")
             if f and f.filename:raw=f.read().decode("utf-8-sig")
             pins=parse_pins(raw,eco)
-            result=scan(pins)
+            result=scan(pins, recommendations)
             if request.form.get("save")=="yes":
                 from .accounts import save_summary
                 save_summary(pins,result)
@@ -470,7 +483,7 @@ def check():
                 return Response("\ufeff"+out.getvalue(),mimetype="text/csv",headers={"Content-Disposition":"attachment; filename=dependency-report.csv"})
         except (ValueError,ParseError,DefusedXmlException,UnicodeError):
             error="请检查文件与版本格式。支持 UTF-8、固定版本、1 至 100 项。"
-    return render_template("library_check.html",eco=eco,ecos=ECOS,raw=raw,result=result,error=error),400 if error else 200
+    return render_template("library_check.html",eco=eco,ecos=ECOS,raw=raw,result=result,recommendations=recommendations,error=error),400 if error else 200
 
 
 QUERIES={
