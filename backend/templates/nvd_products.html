@@ -1,0 +1,12 @@
+{% macro product_table(rules) %}
+<div class="scroll"><table>
+<thead><tr><th>产品（厂商 / 名称）</th><th>记录中的版本条件</th><th>用途</th></tr></thead>
+<tbody>{% for r in rules %}
+{% set parts = r.get('criteria','').split(':') %}
+<tr><td>{% if parts|length == 13 %}{{ parts[3] }} / <strong>{{ parts[4] }}</strong>{% else %}{{ r.get('criteria') or '未提供产品名称' }}{% endif %}</td>
+<td>{% if parts|length == 13 and parts[5] not in ('*','-') %}指定版本 {{ parts[5] }} {% endif %}
+{% for key, label in [('versionStartIncluding','从（含）'),('versionStartExcluding','高于'),('versionEndIncluding','截至（含）'),('versionEndExcluding','低于')] %}{% if r.get(key) %}{{ label }} {{ r[key] }} {% endif %}{% endfor %}
+{% if not (r.versionStartIncluding or r.versionStartExcluding or r.versionEndIncluding or r.versionEndExcluding) and (parts|length != 13 or parts[5] in ('*','-')) %}未列具体版本号{% endif %}</td>
+<td>{{ '受影响产品' if r.vulnerable else '环境条件' }}</td></tr>
+{% endfor %}</tbody></table></div>
+{% endmacro %}
